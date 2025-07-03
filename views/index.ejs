@@ -1,0 +1,19 @@
+<%- include('partials/head') %>
+    <%- include('partials/header') %>
+
+        <h2>Bienvenido
+            <% if (login) {%>
+                <p>El usuario conectado es: <%=user %>
+                </p>
+                <a href="/logout" class="a-logout">Cerrar sesión</a>
+                <% }else { %>
+                    <p>
+                        <%= user %>
+                    </p>
+                    <a href="/login" class="a-login">Iniciar sesión </a>
+
+                    <% } %>
+        </h2>
+
+        <%- include('partials/popover') %>
+            <%- include('partials/footer') %>

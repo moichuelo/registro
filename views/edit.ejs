@@ -1,0 +1,36 @@
+<%- include('partials/head') %> <%- include('partials/header') %>
+        <% if (producto) { %>
+            <div class="container mt-4 w-25">
+                <div class="card border-secundary">
+                    <div class="card-header">
+                        Nuevo registro</div>
+                    <div class="card-body">
+                        <form action="/update" method="POST">
+                            <input type="text" name="ref" id="ref" hidden value="<%= producto.ref %>">
+                            <div class="mb-3">
+                                <label for="nombre" class="form-label">Producto:
+                                </label>
+                                <input type="text" name="nombre" id="nombre" class="form-control"
+                                    value="<%= producto.nombre %>" />
+                            </div>
+                            <div class="mb-3">
+                                <label for="precio" class="form-label">Precio:</label>
+                                <input type="text" name="precio" id="precio" class="form-control"
+                                    value="<%= producto.precio %>" />
+                            </div>
+                            <div class="mb-3">
+                                <label for="stock" class="form-label">Stock:</label>
+                                <input type="number" name="stock" id="stock" class="form-control"
+                                    value="<%= producto.stock %>" />
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                Guardar
+                            </button>
+                            <a href="/admin" class="btn btn-secundary">Cancelar</a>
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+            <% } %>
+                <%- include('partials/footer') %>
