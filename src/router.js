@@ -6,28 +6,34 @@ const db = require("../database/db");
 
 const crud = require("./controllers");
 
-//9 funciones
-function verificarSesion(req, res, next) {
-    if (req.session.loggedin) {
-        return next();
-    }
-    res.redirect('/login');
-}
+const jwt = require("jsonwebtoken");
+const verifyToken = require("./middlewares/verifyToken");
+const verifyAdmin = require("./middlewares/verifyAdmin");
 
-function verificarAdmin(req, res, next) {
-    //operador de encadenamiento opcional ?. Si no existe no da error
-    if (req.session?.loggedin && req.session?.rol === 'admin') {
-        return next();
-    }
-    res.status(403).json({ error: 'Acceso denegado' });
-}
+// //9 funciones
+// function verificarSesion(req, res, next) {
+//     if (req.session.loggedin) {
+//         return next();
+//     }
+//     res.redirect('/login');
+// }
+
+// function verificarAdmin(req, res, next) {
+//     //operador de encadenamiento opcional ?. Si no existe no da error
+//     if (req.session?.loggedin && req.session?.rol === 'admin') {
+//         return next();
+//     }
+//     res.status(403).json({ error: 'Acceso denegado' });
+// }
 
 //9 4 Definir las rutas
 router.get("/", (req, res) => {
     // res.send("Pagina principal");
-    if (req.session.loggedin) {
+    if (req.cookies.token) { // ************
+        const payload = jwt.verify(req.cookies.token, process.env.JWT_SECRET);
+        req.user = payload;
         res.render("index", {
-            user: req.session.name,
+            user: req.user?.name || "Usuario", // ************
             login: true,
         });
     } else {
@@ -43,29 +49,21 @@ router.get("/login", (req, res) => {
 router.get("/registro", (req, res) => {
     res.render("register");
 });
-router.get("/admin", (req, res) => {
+
+router.get("/admin", verifyToken, (req, res) => {
     // res.send("Pagina principal");
-    if (req.session.loggedin) {
-        db.query("SELECT * FROM productos", (error, results) => {
-            if (error) {
-                throw error;
-            } else {
-                res.render("admin", {
-                    productos: results,
-                    user: req.session.name,
-                    login: true,
-                    rol: req.session.rol,
-                });
-            }
-        });
-
-    } else {
-        res.render("admin", {
-            msg: "Acceso no permitido",
-            login: false,
-        });
-    }
-
+    db.query("SELECT * FROM productos", (error, results) => {
+        if (error) {
+            throw error;
+        } else {
+            res.render("admin", {
+                productos: results,
+                user: req.user.name,
+                login: true,
+                rol: req.user.rol,
+            });
+        }
+    });
 });
 
 router.get("/create", (req, res) => {
@@ -96,21 +94,26 @@ router.get("/delete/:id", (req, res) => {
     );
 });
 
+// router.get("/logout", (req, res) => {
+//     req.session = null;
+//     res.redirect('/');
+// });
+
 router.get("/logout", (req, res) => {
-    req.session = null;
+    res.clearCookie("token");
     res.redirect('/');
 });
 
-router.get("/soporte", verificarSesion, (req, res) => {
+router.get("/soporte", verifyToken, (req, res) => {
     res.render("soporte", {
         user: {
-            username: req.session.user || req.session.name,
-            role: req.session.rol
+            username: req.user.user,
+            role: req.user.rol
         }
     });
 });
 
-router.get("/api/mensajes", verificarAdmin, (req, res) => {
+router.get("/api/mensajes", verifyAdmin, (req, res) => {
     const usuario = req.query.con; // Extrae el usuario desde la url (...?con=usuarioX)
 
     if (!usuario) { //si no hay usuario que devuelva el error
@@ -137,10 +140,10 @@ router.get("/api/mensajes", verificarAdmin, (req, res) => {
 });
 
 
-router.get("/api/mensajes/mios", (req, res) => {
-    const usuario = req.session.user;
+router.get("/api/mensajes/mios", verifyToken, (req, res) => {
+    const usuario = req.user.user;
 
-    if (!req.session?.loggedin || !usuario) { //verifica que el usuario este logueado y tenga un usuario
+    if (!usuario) { //verifica que el usuario este logueado y tenga un usuario
         return res.status(403).json({ error: "No autorizado" });
     }
 
@@ -164,7 +167,7 @@ router.get("/api/mensajes/mios", (req, res) => {
 });
 
 
-router.get("/api/usuarios-conversaciones", verificarAdmin, (req, res) => {
+router.get("/api/usuarios-conversaciones", verifyAdmin, (req, res) => {
 
     /*Busca mensajes donde participen administradores.
     usa UNION para combinar las dos consultas y elimina duplicados
@@ -294,23 +297,36 @@ router.post("/auth", async (req, res) => {
                         ruta: "login",
                         login: false,
                     });
-                } else {
-                    req.session.loggedin = true;
-                    req.session.name = results[0].nombre;
-                    req.session.user = results[0].usuario;
-                    req.session.rol = results[0].rol;
-
-                    res.render("login", {
-                        alert: true,
-                        alertTitle: "Login",
-                        alertMessage: "Has iniciado sesión correctamente",
-                        alertIcon: "success",
-                        showConfirmButton: false,
-                        timer: 2500,
-                        ruta: "",
-                        login: true,
-                    });
                 }
+
+                // ✅ Generar token JWT
+                const payload = {
+                    user: results[0].usuario,
+                    name: results[0].nombre,
+                    rol: results[0].rol,
+                };
+
+                // ✅ Crea un toquen firmado con los datos del usuario válido por un periodo de 1 hora
+                const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h", });
+
+                // ✅ Guardar en cookie
+                res.cookie("token", token, {
+                    httpOnly: true,
+                    secure: false, // pon true si usas HTTPS
+                    maxAge: 3600000, // 1 hora
+                });
+
+                // ✅ Enviar respuesta al frontend
+                return res.render("login", {
+                    alert: true,
+                    alertTitle: "Login",
+                    alertMessage: "Has iniciado sesión correctamente",
+                    alertIcon: "success",
+                    showConfirmButton: false,
+                    timer: 2500,
+                    ruta: "",
+                    login: true,
+                });
             }
         );
     } else {
