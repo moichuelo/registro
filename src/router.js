@@ -3,12 +3,22 @@ const router = express.Router();
 const { body, validationResult } = require("express-validator");
 const bcrypt = require("bcryptjs");
 const db = require("../database/db");
+const puppeteer = require("puppeteer");
+const ejs = require("ejs");
+const path = require("path");
+const PDFDocument = require("pdfkit");
+
+
 
 const crud = require("./controllers");
 
 const jwt = require("jsonwebtoken");
 const verifyToken = require("./middlewares/verifyToken");
 const verifyAdmin = require("./middlewares/verifyAdmin");
+
+const upload = require("./middlewares/multerConfig");
+
+const limiter = require("./middlewares/authLimiter");
 
 // //9 funciones
 // function verificarSesion(req, res, next) {
@@ -56,9 +66,27 @@ router.get("/admin", verifyToken, (req, res) => {
         if (error) {
             throw error;
         } else {
+            console.log(req.user);
             res.render("admin", {
                 productos: results,
-                user: req.user.name,
+                user: req.user,
+                login: true,
+                rol: req.user.rol,
+            });
+        }
+    });
+});
+
+router.get("/pdfAdmin", verifyToken, (req, res) => {
+    // res.send("Pagina principal");
+    db.query("SELECT * FROM productos", (error, results) => {
+        if (error) {
+            throw error;
+        } else {
+            console.log(req.user);
+            res.render("pdfTabla", {
+                productos: results,
+                user: req.user,
                 login: true,
                 rol: req.user.rol,
             });
@@ -201,10 +229,104 @@ router.get("/api/usuarios-conversaciones", verifyAdmin, (req, res) => {
     });
 });
 
-//9 8 Definir las rutas POST
+router.get("/pdf/descargar", verifyToken, async (req, res) => {
+    db.query("SELECT * FROM productos", async (error, results) => {
+        if (error) {
+            return res.status(500).send("Error al obtener productos");
+        }
 
-router.post(
-    "/register",
+        try {
+            const html = await ejs.renderFile(path.join(__dirname, "../views/pdfTabla.ejs"), {
+                productos: results
+            }); //genera el html
+
+            const browser = await puppeteer.launch({
+                headless: true,
+                args: ["--no-sandbox", "--disable-setuid-sandbox"],
+            }); // ejecuta un navegador virtual para generar el PDF
+
+            const page = await browser.newPage(); //crea una nueva página
+            await page.setContent(html, { waitUntil: "networkidle0" }); //carga el html
+
+            const pdfBuffer = await page.pdf({
+                format: "A4",
+                printBackground: true,
+                margin: { top: "20px", bottom: "20px" },
+            }); //genera el PDF a partir de la página y lo guarda en memoria
+
+            await browser.close(); //cierra el navegador
+
+            res.setHeader("Content-Type", "application/pdf"); //establece el tipo de contenido
+            res.setHeader("Content-Disposition", 'attachment; filename="productos.pdf"'); //establece el nombre del archivo
+            res.send(pdfBuffer); //envia el PDF
+
+        } catch (err) {
+            console.error("❌ Error al generar el PDF:", err);
+            res.status(500).send("Error interno al generar el PDF");
+        }
+    });
+});
+
+router.get("/pdfkit/descargar", verifyToken, (req, res) => {
+    db.query("SELECT * FROM productos", (error, results) => { //obtenemos los productos
+        if (error) {
+            return res.status(500).send("Error al obtener productos");
+        }
+
+        const doc = new PDFDocument({ margin: 40, size: 'A4' }); //creamos el PDF
+
+        // Encabezados HTTP para descarga
+        res.setHeader("Content-Disposition", 'attachment; filename="productos_desde_cero.pdf"'); //establece el nombre del archivo
+        res.setHeader("Content-Type", "application/pdf"); //establece el tipo de contenido
+
+        doc.pipe(res); // Envía el PDF al cliente
+
+        // Título
+        doc.fontSize(18).text("Listado de Productos", { align: "center" }).moveDown(); //escribe un título centrado y grande
+        //moveDown() mueve el cursor hacia abajo
+
+        // Encabezados de tabla
+        doc.font("Helvetica-Bold").fontSize(12); // Establece la fuente y el tamaño
+        let y = doc.y; // Obtiene la posición vertical actual
+        doc.text("Referencia", 50, y); //escribe el encabezado en x, y
+        doc.text("Nombre", 150, y);
+        doc.text("Precio", 300, y);
+        doc.text("Stock", 380, y);
+
+        // Espacio entre encabezado y datos
+        y += 20;
+
+        doc.font("Helvetica").fontSize(11);// Establece la fuente y el tamaño
+
+        results.forEach((p) => { //recorremos los productos
+            doc.text(p.ref.toString(), 50, y);
+            doc.text(p.nombre, 150, y);
+            doc.text(Number(p.precio).toFixed(2), 300, y);
+            doc.text(p.stock.toString(), 380, y);
+            y += 20; // espacio entre filas
+        });
+
+        doc.end(); // Finaliza el documento
+    });
+});
+
+router.get('/set-lang/:lang', (req, res) => {
+    const lang = req.params.lang; //capturamos el parámetro de la ruta
+    const returnTo = req.query.returnTo || '/'; //capturamos el parámetro de la redirección sino nos manda a la raiz
+
+    if (['es', 'en'].includes(lang)) { //verifica que el idioma sea válido
+        res.cookie('lang', lang, { maxAge: 900000, httpOnly: true }); //guarda el idioma en la cookie
+    }
+
+    res.redirect(returnTo); //redirecciona a la ruta indicada
+});
+
+
+//9 **************************************************
+//9 8 Definir las rutas POST
+//9 **************************************************
+
+router.post("/register", upload.single("profileImage"), //name del input
     [
         body("user")
             .exists()
@@ -233,11 +355,14 @@ router.post(
                 valores: valores,
             });
         } else {
+            console.log("🧾 Body:", req.body);
+            console.log("📁 Archivo subido:", req.file);
             //Recoger los datos del formulario
             const user = req.body.user;
             const name = req.body.name;
             const rol = req.body.rol;
             const pass = req.body.pass;
+            const profileImage = req.file ? req.file.filename : null;
 
             //Cifrar la contraseña
             const passwordHash = await bcrypt.hash(pass, 8);
@@ -250,6 +375,7 @@ router.post(
                     nombre: name,
                     rol: rol,
                     pass: passwordHash,
+                    imagen: profileImage,
                 },
                 (error, results) => {
                     if (error) {
@@ -273,7 +399,7 @@ router.post(
 );
 
 //Ruta de inicio de sesión
-router.post("/auth", async (req, res) => {
+router.post("/auth", limiter, async (req, res) => {
     const user = req.body.user;
     const pass = req.body.pass;
 
@@ -286,7 +412,7 @@ router.post("/auth", async (req, res) => {
                     results.length == 0 ||
                     !(await bcrypt.compare(pass, results[0].pass))
                 ) {
-                    res.render("login", {
+                    return res.render("login", {
                         alert: true,
                         alertTitle: "Error",
                         alertMessage:
@@ -304,6 +430,7 @@ router.post("/auth", async (req, res) => {
                     user: results[0].usuario,
                     name: results[0].nombre,
                     rol: results[0].rol,
+                    imagen: results[0].imagen,
                 };
 
                 // ✅ Crea un toquen firmado con los datos del usuario válido por un periodo de 1 hora

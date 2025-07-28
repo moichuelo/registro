@@ -22,9 +22,34 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/soporte">Soporte</a>
-                    </li>
 
+
+
+
+                </ul>
+
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link idioma d-flex align-items-center <%= lang === 'es' ? 'active' : '' %>"
+                            href="#" onclick="changeLang('es')" title="Español">
+                            <img src="/resources/img/es.png" alt="Español" width="24" height="16" class="me-1">
+                            🇪🇸
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link idioma d-flex align-items-center <%= lang === 'en' ? 'active' : '' %>"
+                            href="#" onclick="changeLang('en')" title="English">
+                            <img src="/resources/img/en.png" alt="English" width="24" height="16" class="me-1">
+                            🇬🇧
+                        </a>
+                    </li>
                 </ul>
             </div>
         </div>
+        <script>
+            function changeLang(lang) {
+                const currentPath = window.location.pathname + window.location.search;
+                window.location.href = `/set-lang/${lang}?returnTo=${encodeURIComponent(currentPath)}`;
+            }
+        </script>
     </nav>

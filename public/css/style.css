@@ -5,6 +5,12 @@ body {
     text-align: center;
 }
 
+.idioma.active {
+    background-color: #b5c1e2;
+    color: white !important;
+    border-radius: 4px;
+}
+
 .login-form,
 .contenedor {
     width: 30%;

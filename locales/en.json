@@ -1,0 +1,6 @@
+{
+    "saludo": "Hello",
+    "usuario": "the current user is: ",
+    "iniciarSesion": "login",
+    "cerrarSesion": "logout"
+}

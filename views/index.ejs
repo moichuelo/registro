@@ -1,18 +1,34 @@
 <%- include('partials/head') %>
     <%- include('partials/header') %>
 
-        <h2>Bienvenido
-            <% if (login) {%>
-                <p>El usuario conectado es: <%=user %>
-                </p>
-                <a href="/logout" class="a-logout">Cerrar sesión</a>
-                <% }else { %>
-                    <p>
-                        <%= user %>
-                    </p>
-                    <a href="/login" class="a-login">Iniciar sesión </a>
+        <!-- <a href="#" onclick="changeLang('es')">Español</a> |
+        <a href="#" onclick="changeLang('en')">English</a>
 
-                    <% } %>
+        <script>
+            function changeLang(lang) {
+                const currentPath = window.location.pathname + window.location.search;
+                window.location.href = `/set-lang/${lang}?returnTo=${encodeURIComponent(currentPath)}`;
+            }
+        </script> -->
+        <h2>
+            <%= __('saludo') %>
+                <% if (login) {%>
+                    <p>
+                        <%= __('usuario') %>
+                            <%=user %>
+                    </p>
+                    <a href="/logout" class="a-logout">
+                        <%= __('cerrarSesion') %>
+                    </a>
+                    <% }else { %>
+                        <p>
+                            <%= user %>
+                        </p>
+                        <a href="/login" class="a-login">
+                            <%= __('iniciarSesion') %>
+                        </a>
+
+                        <% } %>
         </h2>
 
         <%- include('partials/popover') %>
