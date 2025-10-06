@@ -37,6 +37,25 @@ const limiter = require("./middlewares/authLimiter");
 // }
 
 //9 4 Definir las rutas
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: Página principal de la aplicación
+ *     description: Renderiza la vista principal. Si el usuario tiene un JWT válido en cookies, se muestra su nombre; de lo contrario, se le indica iniciar sesión.
+ *     tags:
+ *       - General
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Página principal renderizada correctamente
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               example: "<html>...</html>"
+ */
 router.get("/", (req, res) => {
     // res.send("Pagina principal");
     if (req.cookies.token) { // ************
@@ -60,6 +79,43 @@ router.get("/registro", (req, res) => {
     res.render("register");
 });
 
+
+/**
+ * @swagger
+ * /admin:
+ *   get:
+ *     summary: Página de administración
+ *     description: Renderiza la vista admin con los productos y el usuario logueado
+ *     tags:
+ *       - Administración
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Vista HTML con datos de productos y usuario
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               example: |
+ *                 <!-- Renderiza la vista admin con los siguientes datos -->
+ *                 {
+ *                   "productos": [
+ *                     {
+ *                       ref: "int(11) NOT NULL AUTO_INCREMENT",
+ *                       nombre: "varchar(30) NOT NULL",
+ *                       precio: "decimal(10,2) NOT NULL",
+ *                       stock: "int(11) NULL"
+ *                     }
+ *                   ],
+ *                   "login": true,
+ *                   "rol": "admin"
+ *                 }
+ *       401:
+ *         description: Token inválido o ausente
+ *       500:
+ *         description: Error del servidor o en la consulta a la base de datos
+ */
 router.get("/admin", verifyToken, (req, res) => {
     // res.send("Pagina principal");
     db.query("SELECT * FROM productos", (error, results) => {
@@ -97,6 +153,35 @@ router.get("/pdfAdmin", verifyToken, (req, res) => {
 router.get("/create", (req, res) => {
     res.render("create");
 });
+
+/**
+ * @swagger
+ * /edit/{id}:
+ *   get:
+ *     summary: Renderiza el formulario de edición de un producto
+ *     description: Obtiene un producto por su referencia (`ref`) y renderiza la vista `edit` con sus datos.
+ *     tags:
+ *       - Productos
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Referencia única del producto
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Vista con el formulario de edición del producto
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               example: "<html>...</html>"
+ *       404:
+ *         description: Producto no encontrado
+ *       500:
+ *         description: Error al consultar la base de datos
+ */
 
 router.get("/edit/:id", (req, res) => {
     const ref = req.params.id; //capturamos el parámetro de la ruta
@@ -398,7 +483,52 @@ router.post("/register", upload.single("profileImage"), //name del input
     }
 );
 
-//Ruta de inicio de sesión
+/**
+ * @swagger
+ * /auth:
+ *   post:
+ *     summary: Autentica al usuario y establece una cookie JWT
+ *     description: Valida las credenciales del usuario. Si son correctas, genera un token JWT y lo guarda en una cookie HTTP (`token`). Luego renderiza la vista `/`.
+ *     tags:
+ *       - Autenticación
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/x-www-form-urlencoded:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user
+ *               - pass
+ *             properties:
+ *               user:
+ *                 type: string
+ *                 description: Nombre de usuario
+ *               pass:
+ *                 type: string
+ *                 description: Contraseña del usuario
+ *     responses:
+ *       200:
+ *         description: Autenticación exitosa. Se establece una cookie JWT y se renderiza la vista `/`.
+ *         headers:
+ *           Set-Cookie:
+ *             description: Cookie HTTP que contiene el JWT (token válido por 1 hora)
+ *             schema:
+ *               type: string
+ *               example: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; Path=/; HttpOnly; Max-Age=3600
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               example: "<html>...</html>"
+ *       400:
+ *         description: Usuario o contraseña faltantes
+ *       401:
+ *         description: Credenciales incorrectas
+ *       500:
+ *         description: Error interno del servidor o de base de datos
+ */
+
 router.post("/auth", limiter, async (req, res) => {
     const user = req.body.user;
     const pass = req.body.pass;
